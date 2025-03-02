@@ -69,26 +69,33 @@ Each agent has specific capabilities and tools designed for different aspects of
 
 ### Environment Variables
 
-The application uses environment variables for configuration. These are stored in a `.env` file in the project root. Create a `.env` file with the following variables:
+The application uses environment variables for configuration. These are stored in a `.env` file in the project root. 
 
-```
-# ArangoDB Credentials
-ARANGO_HOST=your_arango_host_url
-ARANGO_USERNAME=your_username
-ARANGO_PASSWORD=your_password
-ARANGO_DB=your_database_name
-ARANGO_VERIFY=True
+A template file `.env_example` is provided. To set up your environment:
 
-# OpenAI API Key
-OPENAI_API_KEY=your_openai_api_key
+1. Copy `.env_example` to `.env`:
+   ```bash
+   cp .env_example .env
+   ```
+2. Edit the `.env` file with your actual credentials:
+   ```
+   # ArangoDB Credentials
+   ARANGO_HOST=your_arango_host_url
+   ARANGO_USERNAME=your_username
+   ARANGO_PASSWORD=your_password
+   ARANGO_DB=your_database_name
+   ARANGO_VERIFY=True
 
-# Graph Cache Settings
-CACHE_TTL=3600  # Cache time-to-live in seconds (1 hour)
+   # OpenAI API Key
+   OPENAI_API_KEY=your_openai_api_key
 
-# Graph Settings
-GRAPH_NAME=SYNTHEA_P100
-DEFAULT_NODE_TYPE=allergies
-```
+   # Graph Cache Settings
+   CACHE_TTL=3600  # Cache time-to-live in seconds (1 hour)
+
+   # Graph Settings
+   GRAPH_NAME=SYNTHEA_P100
+   DEFAULT_NODE_TYPE=allergies
+   ```
 
 The application will load these environment variables using the `settings.py` module. If the `.env` file is not present, default values will be used where available, but the application may not function correctly without valid credentials.
 
@@ -131,6 +138,13 @@ MediGraph Consilium implements an intelligent graph caching system that signific
 ```bash
 pip install -r requirements.txt
 ```
+
+4. Set up your environment variables:
+```bash
+cp .env_example .env
+```
+
+5. Edit the `.env` file with your actual credentials
 
 ## Running the Application
 
