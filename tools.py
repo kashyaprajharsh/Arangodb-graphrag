@@ -14,7 +14,6 @@ import json
 import time
 import re
 import networkx as nx
-import nx_arangodb as nxadb
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Annotated, Dict, TypedDict, Any, Optional, List
@@ -24,7 +23,6 @@ from pydantic import BaseModel
 # LangChain and LangGraph imports
 
 import networkx as nx
-import nx_arangodb as nxadb
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -38,7 +36,6 @@ from langchain_community.graphs import ArangoGraph
 from langchain_community.chains.graph_qa.arangodb import ArangoGraphQAChain
 from langchain_core.tools import tool
 
-from arango import ArangoClient
 from typing import Annotated, Dict, TypedDict, Any ,Optional
 from datetime import datetime
 from langgraph.graph import StateGraph, START, END
@@ -51,30 +48,21 @@ import re
 import time
 import asyncio
 
-# ArangoDB imports
-from arango import ArangoClient
+# Import settings and graph cache module
+from settings import OPENAI_API_KEY
+from graph_cache import get_db, get_graph, get_arango_graph, clear_cache
 
 # Configuration
-os.environ["OPENAI_API_KEY"] = ""
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
-# Initialize ArangoDB connection
-db = ArangoClient(hosts="https://86525f194b77.arangodb.cloud:8529").db(
-    '_system', username="root", password="biafgOk988PlafsbNMC3", verify=True
-)
+# Use cached database connection
+db = get_db()
 
-# Initialize NetworkX graph with GPU support if available
-try:
-    nx.config.backends.arangodb.use_gpu = True
-    print("GPU acceleration enabled for graph operations")
-except ImportError:
-    nx.config.backends.arangodb.use_gpu = False
-    print("GPU acceleration disabled, using CPU for graph operations")
+# Use cached graph
+G_adb = get_graph()
 
-G_adb = nxadb.DiGraph(name="SYNTHEA_P100", db=db)
-
-# Create ArangoDB graph object for graph QA
-from langchain_community.graphs import ArangoGraph
-arango_graph = ArangoGraph(db)
+# Use cached ArangoGraph
+arango_graph = get_arango_graph()
 
 #############################################################################
 # Schema Extraction and Management Functions
@@ -742,3 +730,41 @@ def analyze_treatment_pathways(condition_code: str) -> str:
         return json.dumps(list(cursor)[0])
     except Exception as e:
         return f"Error analyzing treatment pathways: {str(e)}"
+
+def test_queries():
+    """Test the query tool with example queries"""
+    test_queries = [
+        "What collections are available in the database?",
+        # "Show me a sample of patient records",
+        # "Count the total number of records in each collection",
+        # "What are the most common conditions in the database give names of that?",
+        # "Find all allergies for patients over 65 years old",
+        # "what is pagerank of the patient 7c2e78bd-52cf-1fce-acc3-0ddd93104abe"
+        # "Find top 5 providers with unusually high claims for expensive procedures and then detect any anomalies or fraud claims",
+    #     "What are the most common anomaly patterns in claim behaviors for high-cost procedures?",
+        # "Find all the patients with having condition Stress (finding) along with thier age name and id"
+       
+     ]
+
+    for query in test_queries:
+        print(f"\n{'='*50}")
+        print(f"Query: {query}")
+        print(f"{'='*50}")
+        result = text_to_aql_to_text(query)
+        print(result)
+
+
+if __name__ == "__main__":
+    try:
+
+        print("\nExploring database structure:")
+        schema_details = get_schema_details()
+        print(f"\nVertex Collections: {schema_details['vertex_collections']}")
+        print(f"Edge Collections: {schema_details['edge_collections']}")
+
+        # Run test queries
+        print("\nRunning test queries...")
+        test_queries()
+
+    except Exception as e:
+        print(f"Application error: {str(e)}")
