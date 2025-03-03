@@ -706,7 +706,8 @@ def show_agent_page():
         finally:
             # Reset processing flag
             st.session_state[f"processing_{agent_id}"] = False
-            # No explicit rerun needed here
+            # Force a rerun to display the agent's response immediately
+            st.rerun()
 
 # Main app
 def main():
