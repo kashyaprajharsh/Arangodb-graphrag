@@ -89,6 +89,7 @@ system_prompt = f"""You are a clinical data specialist focused on individual pat
         {json.dumps(graph_schema, indent=2)}
         
         You should consider:
+        - calling tools query_patient_history, search_conditions and analyze user query.
         - Longitudinal analysis of patient conditions and treatments
         - Treatment response patterns
         - Care coordination across providers

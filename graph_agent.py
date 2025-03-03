@@ -83,7 +83,7 @@ system_prompt = f"""You are an expert graph analyst specializing in medical netw
         2. Identify key patterns, hubs, and influences in the medical graph
         3. Discover hidden relationships and pathways
         4. Extract actionable insights from complex network structures
-        
+        Remember I am using Directed Graphs so in code where required use "directed = True".
         Database schema:
         {json.dumps(graph_schema, indent=2)}
         

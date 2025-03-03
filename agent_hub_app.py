@@ -298,10 +298,19 @@ def init_session_state():
 def navigate_to_agent(agent_id):
     st.session_state.page = "agent"
     st.session_state.current_agent = agent_id
+    # Remove any processing flags that might be set
+    if f"processing_{agent_id}" in st.session_state:
+        del st.session_state[f"processing_{agent_id}"]
+    st.rerun()
 
 def navigate_to_home():
     st.session_state.page = "home"
     st.session_state.current_agent = None
+    # Clear any processing flags
+    for agent_id in agent_info:
+        if f"processing_{agent_id}" in st.session_state:
+            del st.session_state[f"processing_{agent_id}"]
+    st.rerun()
 
 def clear_chat_history(agent_id=None):
     if agent_id:
@@ -309,6 +318,7 @@ def clear_chat_history(agent_id=None):
     else:
         for agent in agent_info:
             st.session_state.chat_history[agent] = []
+    st.rerun()
 
 # Home page with agent cards
 def show_home_page():
@@ -330,7 +340,6 @@ def show_home_page():
     # Clear all chats button
     if st.sidebar.button("Clear All Chat Histories"):
         clear_chat_history()
-        st.rerun()
     
     # Add graph cache management section
     st.sidebar.markdown("---")
@@ -469,7 +478,6 @@ def show_agent_page():
     # Clear chat button
     if st.sidebar.button("Clear Chat History"):
         clear_chat_history(agent_id)
-        st.rerun()
     
     # Add graph cache management section
     st.sidebar.markdown("---")
@@ -497,22 +505,32 @@ def show_agent_page():
             time.sleep(1)  # Give user time to see the success message
             st.rerun()
     
-    # Create a container for the chat messages
+    # Create containers first
     chat_container = st.container()
-    
-    # Create a container for the intermediate steps
     steps_container = st.container()
+    
+    # Get user input before displaying chat history
+    user_input = st.chat_input(f"Ask {agent['name']} a question...")
+    
+    # Handle new user input immediately
+    if user_input and not st.session_state.get(f"processing_{agent_id}"):
+        # Add user message to chat history
+        st.session_state.chat_history[agent_id].append({"role": "user", "content": user_input})
+        # Initialize debug info
+        st.session_state[f"debug_{agent_id}"] = "Processing your query...\n"
+        # Set processing flag
+        st.session_state[f"processing_{agent_id}"] = True
+        # No explicit rerun needed here as Streamlit will rerun automatically
     
     # Display chat history in the chat container
     with chat_container:
-        # Display all messages using Streamlit's native components
         for message in st.session_state.chat_history[agent_id]:
             if message["role"] == "user":
                 st.chat_message("user").write(message["content"])
             else:
                 st.chat_message("assistant", avatar=agent['icon']).write(message["content"])
     
-    # Create placeholder for intermediate steps (always shown in an expander)
+    # Display debug info
     with steps_container:
         debug_placeholder = st.expander("Agent Thinking Process", expanded=False)
         if not st.session_state.get(f"debug_{agent_id}"):
@@ -520,27 +538,12 @@ def show_agent_page():
         else:
             debug_placeholder.code(st.session_state[f"debug_{agent_id}"])
     
-    # Input area at the bottom - moved outside containers for better positioning
-    user_input = st.chat_input(f"Ask {agent['name']} a question...")
-    
-    if user_input:
-        # Add user message to chat history and immediately show it
-        st.session_state.chat_history[agent_id].append({"role": "user", "content": user_input})
+    # Process the message if needed
+    if (st.session_state.chat_history[agent_id] and 
+        st.session_state.chat_history[agent_id][-1]["role"] == "user" and 
+        st.session_state.get(f"processing_{agent_id}")):
         
-        # Force a rerun to show the user message immediately
-        st.rerun()
-    
-    # Check if we need to process a new message (after the rerun)
-    if st.session_state.chat_history[agent_id] and st.session_state.chat_history[agent_id][-1]["role"] == "user" and not st.session_state.get(f"processing_{agent_id}"):
-        # Mark that we're processing this message
-        st.session_state[f"processing_{agent_id}"] = True
-        
-        # Initialize or clear the debug steps for this agent
-        st.session_state[f"debug_{agent_id}"] = "Processing your query...\n"
-        
-        # Use a simple try-except block to run the agent
         try:
-            # Use the basic non-streaming function directly - simpler and more reliable
             with st.spinner(f"{agent['name']} is thinking..."):
                 # Create a callback handler to capture intermediate steps
                 callback_handler = StreamlitCallbackHandler(agent_id)
@@ -548,23 +551,10 @@ def show_agent_page():
                 # Get the last user message
                 user_message = st.session_state.chat_history[agent_id][-1]["content"]
                 
-                # Initialize debug info
-                st.session_state[f"debug_{agent_id}"] = "Processing your query...\n"
-                
-                # Update the debug display immediately
-                with steps_container:
-                    debug_placeholder = st.expander("Agent Thinking Process", expanded=True)
-                    debug_placeholder.code(st.session_state[f"debug_{agent_id}"])
-                
                 # Handle supervisor agent differently
                 if agent_id == "supervisor":
                     # Add to debug info
                     st.session_state[f"debug_{agent_id}"] += "\nUsing supervisor agent to coordinate between specialized agents...\n"
-                    
-                    # Update debug display
-                    with steps_container:
-                        debug_placeholder = st.expander("Agent Thinking Process", expanded=True)
-                        debug_placeholder.code(st.session_state[f"debug_{agent_id}"])
                     
                     # Use async version with timeout for better user experience
                     use_async = True
@@ -713,11 +703,10 @@ def show_agent_page():
                 {"role": "agent", "content": f"I encountered an error: {error_message}"}
             )
         
-        # Reset processing flag
-        st.session_state[f"processing_{agent_id}"] = False
-        
-        # Rerun to update the chat display with the agent's response
-        st.rerun()
+        finally:
+            # Reset processing flag
+            st.session_state[f"processing_{agent_id}"] = False
+            # No explicit rerun needed here
 
 # Main app
 def main():
