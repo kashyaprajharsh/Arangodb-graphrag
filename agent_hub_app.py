@@ -744,18 +744,12 @@ def show_agent_page():
                                         if hasattr(msg, 'content') and msg.content:
                                             st.session_state[f"debug_{agent_id}"] += f"\n🤔 Processing...\n\n Final LLM Response:\n--------------------------------------------------\n{msg.content}\n--------------------------------------------------\n"
                                             full_response = msg.content
-                                            # Force UI update for streaming
-                                            st.session_state.chat_history[agent_id].append({"role": "agent", "content": msg.content})
-                                            time.sleep(0.1)  # Small delay to ensure UI updates
-                                            st.rerun()
                                 
                                 # Try to extract tool messages
                                 if 'tools' in chunk and 'messages' in chunk['tools']:
                                     for msg in chunk['tools']['messages']:
                                         if hasattr(msg, 'content') and msg.content:
                                             st.session_state[f"debug_{agent_id}"] += f"\n📤 Tool output:\n--------------------------------------------------\n{msg.content}\n--------------------------------------------------\n"
-                                            # Force UI update for tool outputs
-                                            st.rerun()
                             
                             # Update the debug display
                             with steps_container:
