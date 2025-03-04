@@ -27,6 +27,16 @@ import asyncio
 from arango import ArangoClient
 from tools import *
 from callback import *
+from settings import *
+from dotenv import load_dotenv
+load_dotenv()
+
+# os.environ["LANGSMITH_TRACING"] = "true"
+# os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
+# os.environ["LANGSMITH_PROJECT"] = "arangodb-cugraph"
+# os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
+
+
 
 
 # Tools for each specialized agent

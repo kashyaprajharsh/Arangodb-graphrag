@@ -52,7 +52,7 @@ def get_graph():
             logger.info("GPU acceleration disabled, using CPU for graph operations")
         
         start_time = time.time()
-        _G_adb = nxadb.DiGraph(name=GRAPH_NAME, db=db)
+        _G_adb = nxadb.Graph(name=GRAPH_NAME, db=db)
         _last_loaded = current_time
         
         # Check if graph exists

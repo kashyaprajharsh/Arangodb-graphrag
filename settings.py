@@ -21,9 +21,14 @@ ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 ARANGO_DB = os.getenv("ARANGO_DB", "_system")
 ARANGO_VERIFY = os.getenv("ARANGO_VERIFY", "True").lower() in ("true", "1", "t")
 
+# LangSmith Configuration
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
+os.environ["LANGSMITH_PROJECT"] = "arangodb-cugraph"
+os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
+
 # OpenAI API Settings
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-
 # Graph Cache Settings
 CACHE_TTL = int(os.getenv("CACHE_TTL", "3600"))  # Default: 1 hour
 

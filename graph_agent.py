@@ -28,7 +28,7 @@ from arango import ArangoClient
 from tools import *
 from callback import *
 
-
+from settings import *
 # Tools for each specialized agent
 GRAPH_ANALYSIS_TOOLS = [text_to_nx_algorithm_to_text]
 

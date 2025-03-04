@@ -216,6 +216,18 @@ agent_info = {
             "Interpret results in a medically meaningful way",
             "Provide clear, structured responses for medical professionals"
         ],
+        "example_queries": [
+            "How many encounters does patient 7c2e78bd-52cf-1fce-acc3-0ddd93104abe have?",
+            "What is the distribution of healthcare expenses across all patients?",
+            "How many patients have Otitis media as a condition?",
+            "What is the breakdown of patients by race and ethnicity?",
+            "List all patients with healthcare expenses over $3,000",
+            "What is the average age of patients in the database?",
+            "What are the most common conditions in the database?",
+            "How many patients have medication reviews?",
+            "What is the distribution of patient ages by gender?",
+            "Which medications are most commonly prescribed?"
+        ],
         "function": run_aql_agent,
         "stream_function": run_aql_agent_with_stream,
         "color": "#1E88E5"
@@ -229,6 +241,18 @@ agent_info = {
             "Identify key patterns, hubs, and influences in the medical graph",
             "Discover hidden relationships and pathways",
             "Extract actionable insights from complex network structures"
+        ],
+        "example_queries": [
+            "Show the pathway of care for patients with Otitis media",
+            "What providers are most commonly associated with medication reviews?",
+            "Map the relationship between patient ethnicity and healthcare coverage",
+            "Identify patterns in encounter types and healthcare expenses",
+            "Find clusters of patients with similar condition and medication patterns",
+            "What are the most connected conditions in the patient network?",
+            "Find common treatment pathways for patients with medication reviews",
+            "Identify potential drug interaction patterns",
+            "Which conditions frequently occur together?",
+            "Map the progression of conditions over time for Hispanic patients"
         ],
         "function": run_graph_analysis_agent,
         "stream_function": run_graph_analysis_agent_with_stream,
@@ -244,6 +268,18 @@ agent_info = {
             "Evaluate treatment effectiveness for specific patients",
             "Find similar patients for comparative analysis"
         ],
+        "example_queries": [
+            "Show me the complete medical history for patient Shila857 Kshlerin58 (ID: 7c2e78bd-52cf-1fce-acc3-0ddd93104abe)",
+            "What medications have been prescribed to this patient during their medication reviews?",
+            "Compare this patient's healthcare expenses ($3,672.68) with similar patients",
+            "What is the timeline of encounters and conditions for this patient?",
+            "Show me all encounters and procedures for this patient",
+            "Analyze the complete medical history and risk factors for patient 7c2e78bd-52cf-1fce-acc3-0ddd93104abe",
+            "What treatments has this patient received for their chronic conditions?",
+            "Compare this patient's care plan with similar Hispanic patients in Massachusetts",
+            "What are the potential risk factors for this patient?",
+            "Summarize the patient's medication history and effectiveness"
+        ],
         "function": run_patient_data_agent,
         "stream_function": run_patient_data_agent_with_stream,
         "color": "#FB8C00"
@@ -258,6 +294,18 @@ agent_info = {
             "Evaluate treatment effectiveness at scale",
             "Discover correlations between medical factors"
         ],
+        "example_queries": [
+            "What is the average healthcare expense and coverage ratio across all patients?",
+            "How many Hispanic patients are there in Massachusetts?",
+            "What is the distribution of healthcare costs by race and ethnicity?",
+            "Compare healthcare coverage between different ZIP codes in Massachusetts",
+            "What percentage of patients require regular medication reviews?",
+            "What are the most common treatment patterns for medication review patients?",
+            "Analyze the cost-effectiveness of different treatment approaches for Otitis media",
+            "Which conditions account for the highest percentage of total healthcare costs?",
+            "Identify opportunities to reduce medication costs through alternative treatments",
+            "What are the demographic trends in condition prevalence?"
+        ],
         "function": run_population_health_agent,
         "stream_function": run_population_health_agent_with_stream,
         "color": "#8E24AA"
@@ -271,6 +319,18 @@ agent_info = {
             "Coordinate between multiple specialized agents",
             "Synthesize information from different medical perspectives",
             "Provide comprehensive answers to complex medical queries"
+        ],
+        "example_queries": [
+            "Analyze the relationship between patient demographics, healthcare expenses, and conditions",
+            "Compare treatment patterns and costs between different ethnic groups in Massachusetts",
+            "Evaluate the efficiency of medication reviews across different healthcare providers",
+            "What factors contribute to higher healthcare coverage ratios?",
+            "Analyze the complete care journey for patients with multiple conditions",
+            "What are the most effective and cost-efficient treatments across different age groups?",
+            "Analyze the relationship between patient ethnicity, treatment adherence, and health outcomes",
+            "Compare treatment effectiveness and costs between different healthcare providers in Massachusetts",
+            "Identify patterns in treatment success rates across different patient populations",
+            "What are the key factors influencing patient healthcare expenses?"
         ],
         "function": run_supervisor,
         "stream_function": run_supervisor_async,
@@ -475,7 +535,27 @@ def show_agent_page():
     for cap in agent['capabilities']:
         st.sidebar.markdown(f"- {cap}")
     
+    # Example Queries Section
+    st.sidebar.markdown("### Example Queries")
+    st.sidebar.markdown("Click on any example to use it:")
+    
+    # Create a container for example queries with custom styling
+    for i, query in enumerate(agent['example_queries']):
+        if st.sidebar.button(
+            query,
+            key=f"example_query_{i}",
+            help="Click to use this example query",
+            use_container_width=True
+        ):
+            # When clicked, add the query to chat history and trigger processing
+            if not st.session_state.get(f"processing_{agent_id}"):
+                st.session_state.chat_history[agent_id].append({"role": "user", "content": query})
+                st.session_state[f"debug_{agent_id}"] = "Processing your query...\n"
+                st.session_state[f"processing_{agent_id}"] = True
+                st.rerun()
+    
     # Clear chat button
+    st.sidebar.markdown("---")
     if st.sidebar.button("Clear Chat History"):
         clear_chat_history(agent_id)
     

@@ -27,8 +27,7 @@ import asyncio
 from arango import ArangoClient
 from tools import *
 from callback import *
-
-
+from settings import *
 # Tools for each specialized agent
 PATIENT_DATA_TOOLS = [query_patient_history, search_conditions]
 
