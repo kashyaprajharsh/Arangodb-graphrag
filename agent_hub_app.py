@@ -755,7 +755,7 @@ def show_agent_page():
                                         if hasattr(msg, 'content') and msg.content:
                                             st.session_state[f"debug_{agent_id}"] += f"\n📤 Tool output:\n--------------------------------------------------\n{msg.content}\n--------------------------------------------------\n"
                                             # Force UI update for tool outputs
-                                            st.experimental_rerun()
+                                            st.rerun()
                             
                             # Update the debug display
                             with steps_container:
