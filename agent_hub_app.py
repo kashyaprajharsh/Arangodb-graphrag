@@ -321,7 +321,6 @@ agent_info = {
             "Provide comprehensive answers to complex medical queries"
         ],
         "example_queries": [
-            "Analyze the relationship between patient demographics, healthcare expenses, and conditions",
             "Compare treatment patterns and costs between different ethnic groups in Massachusetts",
             "Evaluate the efficiency of medication reviews across different healthcare providers",
             "What factors contribute to higher healthcare coverage ratios?",

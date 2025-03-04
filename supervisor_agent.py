@@ -103,7 +103,7 @@ def create_supervisor_workflow(agents, llm=None, memory=True):
         Compiled supervisor workflow
     """
     if llm is None:
-        llm = create_llm(model_name="gpt-4o-mini", temperature=0.1)
+        llm = create_llm(model_name="gpt-4o", temperature=0.1)
     
     # Create a list of agents for the supervisor
     agent_list = [
@@ -119,39 +119,49 @@ def create_supervisor_workflow(agents, llm=None, memory=True):
     
     Your team consists of:
     
-    1. AQL Query Agent (aql_agent): Expert in converting natural language to AQL queries and executing them against the medical database.
+    1. AQL Query Agent: Expert in converting natural language to AQL queries and executing them against the medical database.
        - Use for: Database queries, data retrieval, complex data filtering
        - Capabilities: Converts natural language to AQL, executes queries, interprets results
+       - To delegate: Use the handoff keyword "aql_agent"
     
-    2. Graph Analysis Agent (graph_agent): Expert in medical network analysis using graph algorithms.
+    2. Graph Analysis Agent: Expert in medical network analysis using graph algorithms.
        - Use for: Network analysis, finding patterns in connected data, identifying key nodes/relationships
        - Capabilities: Applies graph algorithms, identifies patterns, discovers relationships
+       - To delegate: Use the handoff keyword "graph_agent"
     
-    3. Patient Data Agent (patient_agent): Clinical specialist focused on individual patient analysis.
+    3. Patient Data Agent: Clinical specialist focused on individual patient analysis.
        - Use for: Individual patient history, treatment patterns for specific patients
        - Capabilities: Analyzes patient histories, evaluates treatments for specific patients
+       - To delegate: Use the handoff keyword "patient_agent"
     
-    4. Population Health Agent (population_agent): Expert in analyzing trends across patient populations.
+    4. Population Health Agent: Expert in analyzing trends across patient populations.
        - Use for: Population-level trends, condition prevalence, treatment effectiveness at scale
        - Capabilities: Identifies patterns across populations, analyzes condition prevalence
+       - To delegate: Use the handoff keyword "population_agent"
     
     Database schema:
     {json.dumps(graph_schema, indent=2)}
     
     Your job is to:
     1. Analyze the user's medical data question
-    2. Select the most appropriate agent to handle the task
-    3. Provide the selected agent's response to the user
+    2. Select the most appropriate agent(s) to handle the task
+    3. Delegate to the selected agent by using their handoff keyword (e.g., "aql_agent", "graph_agent", etc.)
+    4. When control returns to you, analyze the agent's response and either:
+       a) Provide it to the user if it fully answers their question
+       b) Delegate to another agent if more analysis is needed
+       c) Ask for clarification if the response is unclear
     
     Guidelines for agent selection:
-    - For database queries and data retrieval: Use AQL Query Agent
-    - For network/graph analysis and relationship discovery: Use Graph Analysis Agent
-    - For individual patient analysis: Use Patient Data Agent
-    - For population-level trends and statistics: Use Population Health Agent
+    - For database queries and data retrieval: Delegate to "aql_agent"
+    - For network/graph analysis and relationship discovery: Delegate to "graph_agent"
+    - For individual patient analysis: Delegate to "patient_agent"
+    - For population-level trends and statistics: Delegate to "population_agent"
     
-    Always select the most appropriate agent for the task multiple agents may be needed for complex queries.
+    Always select the most appropriate agent for the task. Multiple agents may be needed for complex queries.
+    When delegating to an agent, use their exact handoff keyword as specified above.
     
-    When a specialized agent provides an answer to the user's question, your response should include that agent's findings. Do not simply acknowledge that the task was completed - relay the actual information that was found.
+    When receiving results from an agent, analyze them carefully before deciding next steps.
+    Your final response to the user should synthesize all the information gathered from the agents into a clear, comprehensive answer.
     """
     
     # Create the supervisor workflow
@@ -160,7 +170,8 @@ def create_supervisor_workflow(agents, llm=None, memory=True):
         model=llm,
         prompt=supervisor_prompt,
         add_handoff_back_messages=True,
-        output_mode="full_history"  # Include full message history
+        output_mode="full_history",  # Include full message history
+        supervisor_name="medical_supervisor"  # Give a descriptive name to the supervisor
     )
     
     # Compile with memory if requested
