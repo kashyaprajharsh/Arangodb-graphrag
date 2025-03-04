@@ -520,6 +520,10 @@ def show_agent_page():
     agent_id = st.session_state.current_agent
     agent = agent_info[agent_id]
     
+    # Initialize needs_processing state if not exists
+    if 'needs_processing' not in st.session_state:
+        st.session_state.needs_processing = False
+    
     # Agent header
     st.title(f"{agent['icon']} {agent['name']}")
     st.write(agent['description'])
@@ -547,12 +551,11 @@ def show_agent_page():
             help="Click to use this example query",
             use_container_width=True
         ):
-            # When clicked, add the query to chat history and trigger processing
+            # Just add the message and set needs_processing flag
             if not st.session_state.get(f"processing_{agent_id}"):
                 st.session_state.chat_history[agent_id].append({"role": "user", "content": query})
-                st.session_state[f"debug_{agent_id}"] = "Processing your query...\n"
-                st.session_state[f"processing_{agent_id}"] = True
-                st.rerun()
+                st.session_state.needs_processing = True
+                st.rerun()  # This will trigger a rerun to show the message first
     
     # Clear chat button
     st.sidebar.markdown("---")
@@ -594,13 +597,10 @@ def show_agent_page():
     
     # Handle new user input immediately
     if user_input and not st.session_state.get(f"processing_{agent_id}"):
-        # Add user message to chat history
+        # Add user message to chat history and set needs_processing
         st.session_state.chat_history[agent_id].append({"role": "user", "content": user_input})
-        # Initialize debug info
-        st.session_state[f"debug_{agent_id}"] = "Processing your query...\n"
-        # Set processing flag
-        st.session_state[f"processing_{agent_id}"] = True
-        # No explicit rerun needed here as Streamlit will rerun automatically
+        st.session_state.needs_processing = True
+        st.rerun()
     
     # Display chat history in the chat container
     with chat_container:
@@ -617,6 +617,13 @@ def show_agent_page():
             debug_placeholder.info("No steps to show yet.")
         else:
             debug_placeholder.code(st.session_state[f"debug_{agent_id}"])
+    
+    # Process the message if needed
+    if st.session_state.needs_processing:
+        st.session_state.needs_processing = False  # Reset the flag
+        st.session_state[f"debug_{agent_id}"] = "Processing your query...\n"
+        st.session_state[f"processing_{agent_id}"] = True
+        st.rerun()  # This will trigger the processing
     
     # Process the message if needed
     if (st.session_state.chat_history[agent_id] and 
