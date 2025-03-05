@@ -156,20 +156,10 @@ def graph_analysis_node(state):
     return state
 
 
-def run_graph_analysis_agent(question: str, current_date: str = None):
+def run_graph_analysis_agent(question: str):
     """
-    Runs the financial agent with the given question.
-    
-    Args:
-        question: The user's question
-        current_date: Optional date context
+    Runs the graph analysis agent with the given question.
     """
-    # Initialize state with datetime object
-    if current_date and isinstance(current_date, str):
-        current_date = datetime.strptime(current_date, "%Y-%m-%d")
-    else:
-        current_date = datetime.now()
-
     initial_state = {
         "messages": [("human", question)],
         "user_input": question,
@@ -177,31 +167,16 @@ def run_graph_analysis_agent(question: str, current_date: str = None):
         "graph_analysis_agent_internal_state": {}
     }
     
-    # Basic usage
-    try:
-        # Create agent directly like in the other methods
-        graph_analysis_agent = create_agent(
-            llm,
-            GRAPH_ANALYSIS_TOOLS,
-            system_prompt,
-            max_iterations=2,
-            max_execution_time=120
-        )
-        
-        # Use invoke instead of aql_query_node
-        result = graph_analysis_agent.invoke(
-            {"messages": initial_state["messages"]},
-            {"callbacks": [initial_state["callback"]]}
-        )
-        
-        # Get the last message content
-        if result["messages"] and len(result["messages"]) > 0:
-            return result["messages"][-1].content
-        else:
-            return "No response generated"
-        
-    except Exception as e:
-        return f"Error running agent: {str(e)}"
+    graph_analysis_agent = create_agent(llm, GRAPH_ANALYSIS_TOOLS, system_prompt)
+    result = graph_analysis_agent.invoke(
+        {"messages": initial_state["messages"]},
+        {"callbacks": [initial_state["callback"]]}
+    )
+    response_text = result["messages"][-1].content if result["messages"] else "No response generated"
+    
+    evaluation = evaluate_response(question, response_text)
+    
+    return response_text, evaluation
 
 def run_graph_analysis_agent_with_stream(question: str, current_date: str = None):
     """
@@ -295,13 +270,50 @@ async def run_graph_analysis_agent_async(question: str, current_date: str = None
     except Exception as e:
         return f"Error running agent: {str(e)}"
 
+def create_judge_llm():
+    """Create the judge LLM for evaluation"""
+    return ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0.1
+    )
 
-# Example usage:
+def evaluate_response(question: str, agent_response: str):
+    """Evaluates the agent's response using a Judge LLM."""
+    judge_prompt = f"""
+    You are an expert evaluator assessing the quality of responses given by a Graph Analysis AI Agent.
+    Your task is to evaluate the response based on:
+    1. **Correctness**: Is the response factually accurate based on graph theory?
+    2. **Relevance**: Does it directly answer the given question?
+    3. **Clarity**: Is the response well-structured and easy to understand?
+    
+    Here is the question:
+    "{question}"
+    
+    Here is the agent's response:
+    "{agent_response}"
+    
+    Provide a structured assessment in JSON format with the following keys:
+    - correctness (score out of 10)
+    - relevance (score out of 10)
+    - clarity (score out of 10)
+    - feedback (brief textual feedback on improvement)
+    """
+    
+    judge_llm = create_judge_llm()
+    evaluation = judge_llm.invoke(judge_prompt)
+    return evaluation.content
+
+
 if __name__ == "__main__":
-    # Basic usage
     question = "find node with highest betweenness centrality in the graph"
-    result = run_graph_analysis_agent(question)
-    print(f"Basic result: {result}")
+    response, evaluation = run_graph_analysis_agent(question)
+    
+    print("Agent Response:")
+    print(response)
+    
+    print("\nEvaluation:")
+    print(evaluation)
+
     
     #Streaming usage
     print("\nStreaming results:")
