@@ -13,7 +13,8 @@ import plotly.graph_objects as go
 import base64
 from io import BytesIO
 import uuid
-from typing import Dict, Any, List
+from typing import Dict, Any, List, TypedDict
+from mem0 import Memory
 
 # Set page configuration
 st.set_page_config(
@@ -43,6 +44,14 @@ from patient_data_agent import run_patient_data_agent, run_patient_data_agent_wi
 from population_health_agent import run_population_health_agent, run_population_health_agent_with_stream
 from supervisor_agent import run_supervisor, run_supervisor_async
 from callback import CustomConsoleCallbackHandler
+
+class AgentState(TypedDict):
+    messages: list  
+    context: Dict
+    internal_state: Dict
+    callback: Any
+    mem0_user_id: str
+    agent_id:str
 
 # Custom Streamlit callback handler
 class StreamlitCallbackHandler(CustomConsoleCallbackHandler):
@@ -352,7 +361,42 @@ def init_session_state():
             st.session_state.chat_history[agent_id] = []
         if f"debug_{agent_id}" not in st.session_state:
             st.session_state[f"debug_{agent_id}"] = ""
+    if "memory" not in st.session_state:
+        custom_prompt = """
+            Please extract entities containing healthcare-related information such as patient details, diagnoses, treatments, medications, medical encounters, and any relevant healthcare events. Additionally, please handle analytical queries regarding healthcare statistics, such as averages, percentages, and cost breakdowns. Each input should be processed to return structured data that can be stored in a system or used to answer specific queries.
 
+            Here are some few-shot examples:
+
+            Input: Please fetch the medical history for patient ID 12345.
+            Output: {{"facts" : ["Medical history for patient ID 12345", "Diagnosis: Hypertension, Type 2 Diabetes", "Treatments: Metformin, Lisinopril"], "action": "fetch"}}
+
+            Input: Fetch the latest prescription details for patient ID 67890.
+            Output: {{"facts" : ["Prescription details for patient ID 67890", "Medications: 50mg Metformin, 10mg Lisinopril"], "action": "fetch"}}
+
+            Input: How much did patients with hypertension spend on healthcare on average last year?
+            Output: {{"facts" : ["Average healthcare expense for patients with hypertension: $4000"], "action": "fetch"}}
+
+            Input: What is the overall patient satisfaction score across all healthcare facilities?
+            Output: {{"facts" : ["Overall patient satisfaction score: 85%"], "action": "fetch"}}
+
+            Return the facts and the corresponding action ("store" or "fetch") in a JSON format as shown above.
+            """
+        config = {
+            "llm": {
+                "provider": "openai",
+                "config": {
+                    "model": "gpt-4o",
+                    "temperature": 0.1,
+                    "max_tokens": 2000,
+                }
+            },
+            "custom_prompt": custom_prompt,
+        }
+        # st.session_state.memory = Memory()
+        st.session_state.memory = Memory.from_config(config_dict=config)
+    # Initialize session state for data if not already set
+    # if "memory_data" not in st.session_state:
+    #     st.session_state.memory_data = st.session_state.memory.get_all(user_id="User", agent_id="Medical_graph_agent")["results"]  # Store the original data in session state
 # Navigation functions
 def navigate_to_agent(agent_id):
     st.session_state.page = "agent"
@@ -515,7 +559,7 @@ def show_home_page():
                 navigate_to_agent("population")
 
 # Agent chat page
-def show_agent_page():
+def show_agent_page(agent_state):
     agent_id = st.session_state.current_agent
     agent = agent_info[agent_id]
     
@@ -538,6 +582,31 @@ def show_agent_page():
     for cap in agent['capabilities']:
         st.sidebar.markdown(f"- {cap}")
     
+    st.sidebar.markdown("### Memory Information")
+    # Usage in your Streamlit app
+    memory_data = st.session_state.memory.get_all(
+        user_id="User", 
+        agent_id="MediGraph Consilium"
+    )['results']
+    # Check if memory_data is empty
+    if not memory_data:
+        st.sidebar.markdown("### No Memory Data Available")
+        st.sidebar.markdown("There is no memory data to display at the moment.")
+    else:
+        # Sidebar dropdown for selecting memory
+        memory_ids = [entry['id'] for entry in memory_data]
+        selected_memory_id = st.sidebar.selectbox('Select Memory', memory_ids)
+
+        # Find the selected memory
+        selected_memory = next(item for item in memory_data if item['id'] == selected_memory_id)
+
+        # Display the memory and created_at in the sidebar with a custom formatted layout
+        st.sidebar.markdown(f"**Memory ID:** {selected_memory_id}")
+        st.sidebar.markdown(f"**Memory:**\n{selected_memory['memory']}")
+        st.sidebar.markdown(f"**Created At:** {selected_memory['created_at']}")
+        st.sidebar.markdown(f"**User ID:** {selected_memory['user_id']}")
+        st.sidebar.markdown(f"**Agent ID:** {selected_memory['agent_id']}")
+    
     # Example Queries Section
     st.sidebar.markdown("### Example Queries")
     st.sidebar.markdown("Click on any example to use it:")
@@ -555,7 +624,6 @@ def show_agent_page():
                 st.session_state.chat_history[agent_id].append({"role": "user", "content": query})
                 st.session_state.needs_processing = True
                 st.rerun()  # This will trigger a rerun to show the message first
-    
     # Clear chat button
     st.sidebar.markdown("---")
     if st.sidebar.button("Clear Chat History"):
@@ -657,10 +725,12 @@ def show_agent_page():
                         async def run_with_progress():
                             # Generate a unique thread ID
                             thread_id = f"streamlit_{agent_id}_{uuid.uuid4()}"
-                            
+                            agent_state['messages'].append(user_message)
                             # Start the supervisor agent
                             task = asyncio.create_task(
                                 run_supervisor_async(
+                                    agent_state, 
+                                    st.session_state.memory,
                                     user_message,
                                     timeout=300,
                                     thread_id=thread_id
@@ -700,8 +770,9 @@ def show_agent_page():
                         # Generate a unique thread ID
                         thread_id = f"streamlit_{agent_id}_{uuid.uuid4()}"
                         
+                        agent_state['messages'].append(user_message)
                         # Run the supervisor
-                        result = run_supervisor(user_message, thread_id=thread_id)
+                        result = run_supervisor(agent_state, st.session_state.memory,user_message, thread_id=thread_id)
                         
                         # Extract the final response from the result
                         if result and "messages" in result and len(result["messages"]) > 0:
@@ -727,10 +798,10 @@ def show_agent_page():
                         # Try to stream with basic error handling
                         full_response = None
                         chunks = []
-                        
+                        agent_state['messages'].append(user_message)
                         # Pass the callback handler to the streaming function if it accepts it
                         # Based on the example, the streaming functions can accept a callback
-                        for chunk in agent["stream_function"](user_message):
+                        for chunk in agent["stream_function"](agent_state, st.session_state.memory, user_message):
                             chunks.append(chunk)
                             
                             # Extract information from the chunk
@@ -750,34 +821,32 @@ def show_agent_page():
                                     for msg in chunk['tools']['messages']:
                                         if hasattr(msg, 'content') and msg.content:
                                             st.session_state[f"debug_{agent_id}"] += f"\n📤 Tool output:\n--------------------------------------------------\n{msg.content}\n--------------------------------------------------\n"
-                            
                             # Update the debug display
                             with steps_container:
                                 debug_placeholder = st.expander("Agent Thinking Process", expanded=True)
                                 debug_placeholder.code(st.session_state[f"debug_{agent_id}"])
-                        
                         # If we didn't get a response, fall back to the basic function
                         if not full_response:
                             st.session_state[f"debug_{agent_id}"] += "\nNo final response from streaming. Using basic function...\n"
                             
                             # Use the basic function with the callback handler
                             st.session_state[f"debug_{agent_id}"] += "\n🔍 Running basic function...\n"
-                            full_response = agent["function"](user_message)
-                    
+                            agent_state['messages'].append(user_message)
+                            full_response = agent["function"](agent_state, st.session_state.memory,user_message)
                     except Exception as e:
                         # Log the error
                         st.session_state[f"debug_{agent_id}"] += f"\nError in streaming: {str(e)}\nFalling back to basic function...\n"
                         
                         # Fall back to the basic function
                         st.session_state[f"debug_{agent_id}"] += "\n🔍 Running basic function...\n"
-                        full_response = agent["function"](user_message)
+                        agent_state['messages'].append(user_message)
+                        full_response = agent["function"](agent_state, st.session_state.memory,user_message)
                 
                 # Update debug info
                 st.session_state[f"debug_{agent_id}"] += "\nAgent response generated successfully."
                 
                 # Add agent response to chat history
                 st.session_state.chat_history[agent_id].append({"role": "agent", "content": full_response})
-        
         except Exception as e:
             # Handle any errors
             error_message = f"Error: {str(e)}"
@@ -797,6 +866,14 @@ def show_agent_page():
 
 # Main app
 def main():
+    agent_state = AgentState(
+    messages=[],
+    context={},
+    internal_state={},
+    callback=None,
+    mem0_user_id= "User",
+    agent_id="MediGraph Consilium"
+    )
     # Apply custom CSS
     local_css()
     
@@ -807,7 +884,7 @@ def main():
     if st.session_state.page == "home":
         show_home_page()
     elif st.session_state.page == "agent":
-        show_agent_page()
+        show_agent_page(agent_state)
 
 if __name__ == "__main__":
     main() 

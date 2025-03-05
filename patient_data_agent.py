@@ -3,7 +3,7 @@ import json
 import time
 import re
 import networkx as nx
-import nx_arangodb as nxadb
+# import nx_arangodb as nxadb
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Annotated, Dict, TypedDict, Any, Optional, List
@@ -49,7 +49,7 @@ def create_llm():
 
 
 
-def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str, max_iterations: int = 2, max_execution_time: int = 120) -> AgentExecutor:
+def create_agent(state, memory,llm: ChatOpenAI, tools: list, system_prompt: str, max_iterations: int = 2, max_execution_time: int = 120) -> AgentExecutor:
     """
     Creates a LangGraph react agent using the specified ChatOpenAI model, tools, and system prompt.
     
@@ -60,12 +60,18 @@ def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str, max_iteration
         max_iterations: Maximum number of iterations (will be converted to recursion_limit)
         max_execution_time: Maximum execution time in seconds
     """
-    def _modify_state_messages(state: AgentState):
+    def _modify_state_messages(state, memory):
+        # Retrieve relevant memories
+        memories = memory.search(state["messages"][-1], user_id=state["mem0_user_id"])
+        context = "Relevant information from previous conversations:\n"
+        for memory__ in memories["results"]:
+            context += f"- {memory__["memory"]}\n"
         # Add system prompt and keep existing messages
-        return [("system", system_prompt)] + state["messages"]
+        full_prompt = system_prompt + "\n" + "Use the provided context to personalize your responses and remember user preferences and past interactions." + "\n" + context + "User-", " ".join(state["messages"])
+        return full_prompt[0]
     
     # Create the react agent
-    agent = create_react_agent(llm, tools, prompt=_modify_state_messages)
+    agent = create_react_agent(llm, tools, prompt=_modify_state_messages(state, memory))
     
     # Set recursion limit (LangGraph uses 2 steps per iteration + 1)
     agent.recursion_limit = 2 * max_iterations + 1
@@ -155,7 +161,7 @@ def patient_data_node(state):
     return state
 
 
-def run_patient_data_agent(question: str, current_date: str = None):
+def run_patient_data_agent(state, memory, question: str, current_date: str = None):
     """
     Runs the financial agent with the given question.
     
@@ -180,6 +186,8 @@ def run_patient_data_agent(question: str, current_date: str = None):
     try:
         # Create agent directly like in the other methods
         patient_data_agent = create_agent(
+            state,
+            memory,
             llm,
             PATIENT_DATA_TOOLS,
             system_prompt,
@@ -192,7 +200,7 @@ def run_patient_data_agent(question: str, current_date: str = None):
             {"messages": initial_state["messages"]},
             {"callbacks": [initial_state["callback"]]}
         )
-        
+        memory.add(f"User: {state["messages"][-1]}\nAssistant: {result}", user_id=state["mem0_user_id"], agent_id=state["agent_id"])
         # Get the last message content
         if result["messages"] and len(result["messages"]) > 0:
             return result["messages"][-1].content
@@ -202,7 +210,7 @@ def run_patient_data_agent(question: str, current_date: str = None):
     except Exception as e:
         return f"Error running agent: {str(e)}"
 
-def run_patient_data_agent_with_stream(question: str, current_date: str = None):
+def run_patient_data_agent_with_stream(state, memory,question: str, current_date: str = None):
     """
     Runs the financial agent with streaming output.
     
@@ -228,6 +236,8 @@ def run_patient_data_agent_with_stream(question: str, current_date: str = None):
    
     
     patient_data_agent = create_agent(
+        state,
+        memory,
         llm,
         PATIENT_DATA_TOOLS,
         system_prompt,
@@ -243,7 +253,7 @@ def run_patient_data_agent_with_stream(question: str, current_date: str = None):
             stream_mode="updates"
         ):
             yield chunk
-            
+        memory.add(f"User: {state["messages"][-1]}\nAssistant: {chunk}", user_id=state["mem0_user_id"], agent_id=state["agent_id"])    
     except Exception as e:
         yield {"error": f"Error streaming agent: {str(e)}"}
 
