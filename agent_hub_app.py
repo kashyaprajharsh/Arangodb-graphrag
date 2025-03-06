@@ -395,8 +395,9 @@ def init_session_state():
         # st.session_state.memory = Memory()
         st.session_state.memory = Memory.from_config(config_dict=config)
     # Initialize session state for data if not already set
-    # if "memory_data" not in st.session_state:
-    #     st.session_state.memory_data = st.session_state.memory.get_all(user_id="User", agent_id="Medical_graph_agent")["results"]  # Store the original data in session state
+    if "memory_data" not in st.session_state:
+        st.session_state.memory_data = st.session_state.memory.get_all(user_id="User", agent_id="Medical_graph_agent")["results"]  # Store the original data in session state
+
 # Navigation functions
 def navigate_to_agent(agent_id):
     st.session_state.page = "agent"
@@ -578,52 +579,56 @@ def show_agent_page(agent_state):
     if st.sidebar.button("← Back to Agent Hub", key="back_button"):
         navigate_to_home()
     
-    st.sidebar.markdown("### Capabilities")
-    for cap in agent['capabilities']:
-        st.sidebar.markdown(f"- {cap}")
-    
+    # Capabilities section with expander
+    with st.sidebar.expander("### Capabilities", expanded=False):
+        for cap in agent['capabilities']:
+            st.markdown(f"- {cap}")
+
     st.sidebar.markdown("### Memory Information")
-    # Usage in your Streamlit app
     memory_data = st.session_state.memory.get_all(
         user_id="User", 
         agent_id="MediGraph Consilium"
     )['results']
-    # Check if memory_data is empty
-    if not memory_data:
-        st.sidebar.markdown("### No Memory Data Available")
-        st.sidebar.markdown("There is no memory data to display at the moment.")
-    else:
-        # Sidebar dropdown for selecting memory
-        memory_ids = [entry['id'] for entry in memory_data]
-        selected_memory_id = st.sidebar.selectbox('Select Memory', memory_ids)
 
-        # Find the selected memory
-        selected_memory = next(item for item in memory_data if item['id'] == selected_memory_id)
+    with st.sidebar.expander("View Memory Details", expanded=False):
+        # Check if memory_data is empty
+        if not memory_data:
+            st.markdown("### No Memory Data Available")
+            st.markdown("There is no memory data to display at the moment.")
+        else:
+            # Sidebar dropdown for selecting memory
+            memory_ids = [entry['id'] for entry in memory_data]
+            selected_memory_id = st.selectbox('Select Memory', memory_ids)
 
-        # Display the memory and created_at in the sidebar with a custom formatted layout
-        st.sidebar.markdown(f"**Memory ID:** {selected_memory_id}")
-        st.sidebar.markdown(f"**Memory:**\n{selected_memory['memory']}")
-        st.sidebar.markdown(f"**Created At:** {selected_memory['created_at']}")
-        st.sidebar.markdown(f"**User ID:** {selected_memory['user_id']}")
-        st.sidebar.markdown(f"**Agent ID:** {selected_memory['agent_id']}")
+            # Find the selected memory
+            selected_memory = next(item for item in memory_data if item['id'] == selected_memory_id)
+
+            # Display the memory and created_at in the sidebar with a custom formatted layout
+            st.markdown(f"**Memory ID:** {selected_memory_id}")
+            st.markdown(f"**Memory:**\n{selected_memory['memory']}")
+            st.markdown(f"**Created At:** {selected_memory['created_at']}")
+            st.markdown(f"**User ID:** {selected_memory['user_id']}")
+            st.markdown(f"**Agent ID:** {selected_memory['agent_id']}")
     
     # Example Queries Section
     st.sidebar.markdown("### Example Queries")
-    st.sidebar.markdown("Click on any example to use it:")
+    st.sidebar.markdown("Select an example query from the dropdown:")
     
-    # Create a container for example queries with custom styling
-    for i, query in enumerate(agent['example_queries']):
-        if st.sidebar.button(
-            query,
-            key=f"example_query_{i}",
-            help="Click to use this example query",
-            use_container_width=True
-        ):
-            # Just add the message and set needs_processing flag
-            if not st.session_state.get(f"processing_{agent_id}"):
-                st.session_state.chat_history[agent_id].append({"role": "user", "content": query})
-                st.session_state.needs_processing = True
-                st.rerun()  # This will trigger a rerun to show the message first
+    # Create a dropdown for example queries
+    selected_query = st.sidebar.selectbox(
+        "Choose an example query",
+        agent['example_queries'],
+        key=f"example_dropdown_{agent_id}",
+        label_visibility="collapsed"
+    )
+    
+    # Button to use the selected query
+    if st.sidebar.button("Use Selected Query", use_container_width=True):
+        if not st.session_state.get(f"processing_{agent_id}"):
+            st.session_state.chat_history[agent_id].append({"role": "user", "content": selected_query})
+            st.session_state.needs_processing = True
+            st.rerun()  # This will trigger a rerun to show the message first
+    
     # Clear chat button
     st.sidebar.markdown("---")
     if st.sidebar.button("Clear Chat History"):

@@ -28,6 +28,7 @@ from arango import ArangoClient
 from tools import *
 from callback import *
 from settings import *
+from memory import get_memory_tools, get_memory_store
 # Tools for each specialized agent
 POPULATION_HEALTH_TOOLS = [analyze_medications, analyze_treatment_pathways,search_conditions]
 
@@ -65,13 +66,23 @@ def create_agent(state, memory,llm: ChatOpenAI, tools: list, system_prompt: str,
         memories = memory.search(state["messages"][-1], user_id=state["mem0_user_id"])
         context = "Relevant information from previous conversations:\n"
         for memory__ in memories["results"]:
-            context += f"- {memory__["memory"]}\n"
+            context += f"- {memory__['memory']}\n"
         # Add system prompt and keep existing messages
         full_prompt = system_prompt + "\n" + "Use the provided context to personalize your responses and remember user preferences and past interactions." + "\n" + context + "User-", " ".join(state["messages"])
         return full_prompt[0]
     
-    # Create the react agent
-    agent = create_react_agent(llm, tools, prompt=_modify_state_messages(state, memory))
+   
+    # Add memory tools to the existing tools
+    memory_tools = get_memory_tools("population_health")
+    all_tools = tools + memory_tools
+    
+    # Create the react agent with memory capabilities
+    agent = create_react_agent(
+        llm, 
+        all_tools, 
+        prompt=_modify_state_messages(state, memory),
+        store=get_memory_store()
+    )
     
     # Set recursion limit (LangGraph uses 2 steps per iteration + 1)
     agent.recursion_limit = 2 * max_iterations + 1
@@ -201,7 +212,7 @@ def run_population_health_agent(state, memory,question: str, current_date: str =
             {"messages": initial_state["messages"]},
             {"callbacks": [initial_state["callback"]]}
         )
-        memory.add(f"User: {state["messages"][-1]}\nAssistant: {result}", user_id=state["mem0_user_id"], agent_id=state["agent_id"])
+        memory.add(f"User: {state['messages'][-1]}\nAssistant: {result}", user_id=state['mem0_user_id'], agent_id=state['agent_id'])
         # Get the last message content
         if result["messages"] and len(result["messages"]) > 0:
             return result["messages"][-1].content
@@ -254,7 +265,7 @@ def run_population_health_agent_with_stream(state, memory,question: str, current
             stream_mode="updates"
         ):
             yield chunk
-        memory.add(f"User: {state["messages"][-1]}\nAssistant: {chunk}", user_id=state["mem0_user_id"], agent_id=state["agent_id"])    
+        memory.add(f"User: {state['messages'][-1]}\nAssistant: {chunk}", user_id=state['mem0_user_id'], agent_id=state['agent_id'])    
     except Exception as e:
         yield {"error": f"Error streaming agent: {str(e)}"}
 

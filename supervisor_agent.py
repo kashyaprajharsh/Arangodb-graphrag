@@ -25,6 +25,10 @@ from population_health_agent import create_agent as create_population_agent, POP
 from callback import CustomConsoleCallbackHandler
 from tools import graph_schema
 from settings import *
+# Memory imports
+from langgraph.store.memory import InMemoryStore
+from langmem import create_manage_memory_tool, create_search_memory_tool
+
 
 class AgentState(TypedDict):
     messages: list  
@@ -121,7 +125,7 @@ def create_supervisor_workflow(state, memory_, question,agents, llm=None, memory
     memories = memory_.search(state["messages"][-1], user_id=state["mem0_user_id"])
     context = "Relevant information from previous conversations:\n"
     for memory__ in memories["results"]:
-        context += f"- {memory__["memory"]}\n"
+        context += f"- {memory__['memory']}\n"
     # Create the supervisor prompt
     supervisor_prompt = f"""
     You are a medical data analysis supervisor coordinating a team of specialized agents.
@@ -237,7 +241,7 @@ def run_supervisor(state, memory, question: str, current_date: str = None, threa
         config=config
     )
 
-    memory.add(f"User: {state["messages"][-1]}\nAssistant: {result}", user_id=state["mem0_user_id"])
+    memory.add(f"User: {state['messages'][-1]}\nAssistant: {result}", user_id=state['mem0_user_id'])
     return result
 
 # # Extract the final response
@@ -302,7 +306,7 @@ async def run_supervisor_async(state,memory, question: str, current_date: str = 
             )
         )
         result = await asyncio.wait_for(task, timeout=timeout)
-        memory.add(f"User: {state["messages"][-1]}\nAssistant: {result}", user_id=state["mem0_user_id"])
+        memory.add(f"User: {state['messages'][-1]}\nAssistant: {result}", user_id=state['mem0_user_id'])
         # Extract the final response
         if result and "messages" in result and len(result["messages"]) > 0:
             last_message = result["messages"][-1]

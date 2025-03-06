@@ -27,8 +27,9 @@ import asyncio
 from arango import ArangoClient
 from tools import *
 from callback import *
-
 from settings import *
+from memory import get_memory_tools, get_memory_store
+
 # Tools for each specialized agent
 GRAPH_ANALYSIS_TOOLS = [text_to_nx_algorithm_to_text]
 
@@ -64,8 +65,17 @@ def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str, max_iteration
         # Add system prompt and keep existing messages
         return [("system", system_prompt)] + state["messages"]
     
-    # Create the react agent
-    agent = create_react_agent(llm, tools, prompt=_modify_state_messages)
+    # Add memory tools to the existing tools
+    memory_tools = get_memory_tools("graph_analysis")
+    all_tools = tools + memory_tools
+    
+    # Create the react agent with memory capabilities
+    agent = create_react_agent(
+        llm, 
+        all_tools, 
+        prompt=_modify_state_messages,
+        store=get_memory_store()
+    )
     
     # Set recursion limit (LangGraph uses 2 steps per iteration + 1)
     agent.recursion_limit = 2 * max_iterations + 1
