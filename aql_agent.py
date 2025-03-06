@@ -3,7 +3,7 @@ import json
 import time
 import re
 import networkx as nx
-import nx_arangodb as nxadb
+# import nx_arangodb as nxadb
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Annotated, Dict, TypedDict, Any, Optional, List
@@ -123,7 +123,7 @@ def evaluate_with_judge(response: str, expected_answer: str):
         return "No evaluation generated"
 
 
-def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str, max_iterations: int = 2, max_execution_time: int = 120) -> AgentExecutor:
+def create_agent(state, memory, llm: ChatOpenAI, tools: list, system_prompt: str, max_iterations: int = 2, max_execution_time: int = 120) -> AgentExecutor:
     """
     Creates a LangGraph react agent using the specified ChatOpenAI model, tools, and system prompt.
     
@@ -134,12 +134,18 @@ def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str, max_iteration
         max_iterations: Maximum number of iterations (will be converted to recursion_limit)
         max_execution_time: Maximum execution time in seconds
     """
-    def _modify_state_messages(state: AgentState):
+    def _modify_state_messages(state, memory):
+        # Retrieve relevant memories
+        memories = memory.search(state["messages"][-1], user_id=state["mem0_user_id"])
+        context = "Relevant information from previous conversations:\n"
+        for memory__ in memories["results"]:
+            context += f"- {memory__["memory"]}\n"
         # Add system prompt and keep existing messages
-        return [("system", system_prompt)] + state["messages"]
+        full_prompt = system_prompt + "\n" + "Use the provided context to personalize your responses and remember user preferences and past interactions." + "\n" + context + "User-", " ".join(state["messages"])
+        return full_prompt[0]
     
     # Create the react agent
-    agent = create_react_agent(llm, tools, prompt=_modify_state_messages)
+    agent = create_react_agent(llm, tools, prompt=_modify_state_messages(state, memory))
     
     # Set recursion limit (LangGraph uses 2 steps per iteration + 1)
     agent.recursion_limit = 2 * max_iterations + 1
@@ -225,7 +231,7 @@ def aql_query_node(state):
     return state
 
 
-def run_aql_agent(question: str, expected_answer: str, current_date: str = None):
+def run_aql_agent(state, memory, question: str, current_date: str = None):
     """
     Runs the financial agent with the given question and evaluates the result.
     
@@ -251,6 +257,8 @@ def run_aql_agent(question: str, expected_answer: str, current_date: str = None)
     try:
         # Create agent directly like in the other methods
         aql_agent = create_agent(
+            state,
+            memory,
             llm,
             AQL_QUERY_TOOLS,
             system_prompt,
@@ -262,7 +270,8 @@ def run_aql_agent(question: str, expected_answer: str, current_date: str = None)
             {"messages": initial_state["messages"]},
             {"callbacks": [initial_state["callback"]]},
         )
-        
+        memory.add(f"User: {state["messages"][-1]}\nAssistant: {result}", user_id=state["mem0_user_id"], agent_id=state["agent_id"])
+        print("memory -:", memory.get_all(user_id=state["mem0_user_id"], agent_id=state["agent_id"]))
         # Get the last message content
         if result["messages"] and len(result["messages"]) > 0:
             agent_response = result["messages"][-1].content
@@ -275,7 +284,102 @@ def run_aql_agent(question: str, expected_answer: str, current_date: str = None)
         return agent_response, evaluation
         
     except Exception as e:
-        return f"Error running agent: {str(e)}", None
+        return f"Error running agent: {str(e)}"
+
+def run_aql_agent_with_stream(state, memory, question: str, current_date: str = None):
+    """
+    Runs the financial agent with streaming output.
+    
+    Args:
+        question: The user's question
+        current_date: Optional date context
+        personality: Optional personality configuration
+    """
+    # Initialize state with datetime object
+    if current_date and isinstance(current_date, str):
+        current_date = datetime.strptime(current_date, "%Y-%m-%d")
+    else:
+        current_date = datetime.now()
+
+    initial_state = {
+        "messages": [("human", question)],
+        "user_input": question,
+        "callback": CustomConsoleCallbackHandler(),
+        "aql_query_agent_internal_state": {}
+    }
+    
+    # Create agent
+   
+    
+    aql_agent = create_agent(
+        state,
+        memory,
+        llm,
+        AQL_QUERY_TOOLS,
+        system_prompt,
+        max_iterations=2,
+        max_execution_time=120
+    )
+    
+    # Stream with intermediate steps
+    try:
+        for chunk in aql_agent.stream(
+            {"messages": initial_state["messages"]},
+            {"callbacks": [initial_state["callback"]]},
+            stream_mode="updates"
+        ):
+            yield chunk
+        memory.add(f"User: {state["messages"][-1]}\nAssistant: {chunk}", user_id=state["mem0_user_id"], agent_id=state["agent_id"])
+        print("memory -:", memory.get_all(user_id=state["mem0_user_id"], agent_id=state["agent_id"]))
+    except Exception as e:
+        yield {"error": f"Error streaming agent: {str(e)}"}
+
+async def run_aql_agent_async(question: str, current_date: str = None, timeout: int = 300):
+    """
+    Runs the financial agent asynchronously with a total timeout.
+    
+    Args:
+        question: The user's question
+        current_date: Optional date context
+        timeout: Total timeout in seconds
+    """
+    # Initialize state with datetime object
+    if current_date and isinstance(current_date, str):
+        current_date = datetime.strptime(current_date, "%Y-%m-%d")
+    else:
+        current_date = datetime.now()
+
+    initial_state = {
+        "messages": [("human", question)],
+        "user_input": question,
+        "callback": CustomConsoleCallbackHandler(),
+        "aql_query_agent_internal_state": {}
+    }
+
+    
+    aql_agent = create_agent(
+        llm,
+        AQL_QUERY_TOOLS,
+        system_prompt,
+        max_iterations=2,
+        max_execution_time=120
+    )
+    
+    try:
+        # Run with overall timeout
+        task = asyncio.create_task(
+            aql_agent.ainvoke(
+                {"messages": initial_state["messages"]},
+                {"callbacks": [initial_state["callback"]]}
+            )
+        )
+        result = await asyncio.wait_for(task, timeout=timeout)
+        return result["messages"][-1].content
+        
+    except asyncio.TimeoutError:
+        return "Agent stopped due to overall timeout."
+    except Exception as e:
+        return f"Error running agent: {str(e)}"
 
 
 # Example usage:

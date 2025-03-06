@@ -40,11 +40,13 @@ def create_llm(model_name="gpt-4o-mini", temperature=0.1):
     )
 
 # Create the specialized agents
-def create_specialized_agents(llm):
+def create_specialized_agents(state, memory, llm):
     """Create all specialized agents using the provided LLM"""
     
     # AQL Query Agent
     aql_agent = create_aql_agent(
+        state,
+        memory,
         llm=llm,
         tools=AQL_QUERY_TOOLS,
         system_prompt=aql_system_prompt,
@@ -65,6 +67,8 @@ def create_specialized_agents(llm):
     
     # Patient Data Agent
     patient_agent = create_patient_agent(
+        state,
+        memory,
         llm=llm,
         tools=PATIENT_DATA_TOOLS,
         system_prompt=patient_system_prompt,
@@ -75,6 +79,8 @@ def create_specialized_agents(llm):
     
     # Population Health Agent
     population_agent = create_population_agent(
+        state,
+        memory,
         llm=llm,
         tools=POPULATION_HEALTH_TOOLS,
         system_prompt=population_system_prompt,
@@ -90,7 +96,7 @@ def create_specialized_agents(llm):
         "population_agent": population_agent
     }
 
-def create_supervisor_workflow(agents, llm=None, memory=True):
+def create_supervisor_workflow(state, memory_, question,agents, llm=None, memory=True):
     """
     Create a supervisor workflow that coordinates between specialized agents.
     
@@ -112,7 +118,10 @@ def create_supervisor_workflow(agents, llm=None, memory=True):
         agents["patient_agent"],
         agents["population_agent"]
     ]
-    
+    memories = memory_.search(state["messages"][-1], user_id=state["mem0_user_id"])
+    context = "Relevant information from previous conversations:\n"
+    for memory__ in memories["results"]:
+        context += f"- {memory__["memory"]}\n"
     # Create the supervisor prompt
     supervisor_prompt = f"""
     You are a medical data analysis supervisor coordinating a team of specialized agents.
@@ -162,6 +171,8 @@ def create_supervisor_workflow(agents, llm=None, memory=True):
     
     When receiving results from an agent, analyze them carefully before deciding next steps.
     Your final response to the user should synthesize all the information gathered from the agents into a clear, comprehensive answer.
+    Use the provided context to personalize your responses and remember user preferences and past interactions.
+    {context}
     """
     
     # Create the supervisor workflow
@@ -182,7 +193,7 @@ def create_supervisor_workflow(agents, llm=None, memory=True):
     else:
         return workflow.compile()
 
-def run_supervisor(question: str, current_date: str = None, thread_id: str = "default_thread"):
+def run_supervisor(state, memory, question: str, current_date: str = None, thread_id: str = "default_thread"):
     """
     Run the supervisor agent with the given question.
     
@@ -204,13 +215,14 @@ def run_supervisor(question: str, current_date: str = None, thread_id: str = "de
     llm = create_llm(model_name="gpt-4o-mini", temperature=0.1)
     
     # Create specialized agents
-    agents = create_specialized_agents(llm)
+    agents = create_specialized_agents(state, memory, llm)
     
     # Create supervisor workflow
-    supervisor = create_supervisor_workflow(agents, llm)
+    supervisor = create_supervisor_workflow(state, memory,question, agents, llm)
     
     # Create config with required configurable parameters
-    config = {"configurable": {"thread_id": thread_id}}
+    # config = {"configurable": {"thread_id": thread_id}}
+    config = {"configurable": {"thread_id": state["mem0_user_id"]}}
     
     # Run the supervisor
     result = supervisor.invoke(
@@ -224,6 +236,8 @@ def run_supervisor(question: str, current_date: str = None, thread_id: str = "de
         },
         config=config
     )
+
+    memory.add(f"User: {state["messages"][-1]}\nAssistant: {result}", user_id=state["mem0_user_id"])
     return result
 
 # # Extract the final response
@@ -240,7 +254,7 @@ def run_supervisor(question: str, current_date: str = None, thread_id: str = "de
 #         return "No response generated"
 
 
-async def run_supervisor_async(question: str, current_date: str = None, timeout: int = 300, thread_id: str = "default_thread"):
+async def run_supervisor_async(state,memory, question: str, current_date: str = None, timeout: int = 300, thread_id: str = "default_thread"):
     """
     Run the supervisor agent asynchronously with a total timeout.
     
@@ -263,13 +277,14 @@ async def run_supervisor_async(question: str, current_date: str = None, timeout:
     llm = create_llm(model_name="gpt-4o-mini", temperature=0.1)
     
     # Create specialized agents
-    agents = create_specialized_agents(llm)
+    agents = create_specialized_agents(state, memory, llm)
     
     # Create supervisor workflow
-    supervisor = create_supervisor_workflow(agents, llm)
+    supervisor = create_supervisor_workflow(state, memory,question, agents, llm)
     
     # Create config with required configurable parameters
-    config = {"configurable": {"thread_id": thread_id}}
+    # config = {"configurable": {"thread_id": thread_id}}
+    config = {"configurable": {"thread_id": state["mem0_user_id"]}}
     
     try:
         # Run with overall timeout
@@ -287,7 +302,7 @@ async def run_supervisor_async(question: str, current_date: str = None, timeout:
             )
         )
         result = await asyncio.wait_for(task, timeout=timeout)
-        
+        memory.add(f"User: {state["messages"][-1]}\nAssistant: {result}", user_id=state["mem0_user_id"])
         # Extract the final response
         if result and "messages" in result and len(result["messages"]) > 0:
             last_message = result["messages"][-1]
