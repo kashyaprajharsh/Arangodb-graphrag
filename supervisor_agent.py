@@ -115,7 +115,7 @@ def create_supervisor_workflow(state, memory_, question,agents, llm=None, memory
         Compiled supervisor workflow
     """
     if llm is None:
-        llm = create_llm(model_name="gpt-4o", temperature=0.1)
+        llm = create_llm(model_name="gpt-4o-mini", temperature=0.1)
     
     # Create a list of agents for the supervisor
     agent_list = [

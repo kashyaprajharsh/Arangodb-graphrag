@@ -18,8 +18,8 @@ from langchain_openai import ChatOpenAI
 # Judge LLM Setup (Using a single judge repeated thrice)
 # ----------------------------
 def create_judge_llm() -> ChatOpenAI:
-    judge = ChatOpenAI(model="gpt-4o", temperature=0.1)
-    judge.model_name = "gpt-4o"
+    judge = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+    judge.model_name = "gpt-4o-mini"
     return judge
 
 judge_llm = create_judge_llm()

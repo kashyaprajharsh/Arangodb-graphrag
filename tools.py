@@ -223,7 +223,7 @@ def text_to_aql_to_text(query: str):
         # Initialize LLM
         llm = ChatOpenAI(
             temperature=0.2,
-            model_name="gpt-4o"
+            model_name="gpt-4o-mini"
         )
 
         # Initialize chain with default prompts
@@ -352,7 +352,7 @@ def text_to_nx_algorithm_to_text(query: str):
     be executed, executing the algorithm, and translating the results back
     to Natural Language, with respect to the original query.
     """
-    llm = ChatOpenAI(temperature=0.3, model_name="gpt-4o")
+    llm = ChatOpenAI(temperature=0.3, model_name="gpt-4o-mini")
 
     ######################
     print("1) Generating NetworkX code")
