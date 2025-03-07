@@ -15,7 +15,7 @@ from io import BytesIO
 import uuid
 from typing import Dict, Any, List, TypedDict
 from mem0 import Memory
-
+from evaluation import *
 # Set page configuration
 st.set_page_config(
     page_title="MediGraph Consilium",
@@ -348,40 +348,31 @@ agent_info = {
 
 # Initialize session state
 def init_session_state():
+    # Initialize page state
     if "page" not in st.session_state:
         st.session_state.page = "home"
-    if "current_agent" not in st.session_state:
-        st.session_state.current_agent = None
+    
+    # Initialize chat history for each agent
     if "chat_history" not in st.session_state:
-        st.session_state.chat_history = {}
-    if "graph_initialized" not in st.session_state:
-        st.session_state.graph_initialized = False
-    for agent_id in agent_info:
-        if agent_id not in st.session_state.chat_history:
-            st.session_state.chat_history[agent_id] = []
+        st.session_state.chat_history = {agent_id: [] for agent_id in agent_info.keys()}
+    
+    # Initialize debug info for each agent
+    for agent_id in agent_info.keys():
         if f"debug_{agent_id}" not in st.session_state:
             st.session_state[f"debug_{agent_id}"] = ""
+        if f"processing_{agent_id}" not in st.session_state:
+            st.session_state[f"processing_{agent_id}"] = False
+        # Initialize evaluation state for each agent
+        if f"evaluation_{agent_id}" not in st.session_state:
+            st.session_state[f"evaluation_{agent_id}"] = None
+    
+    # Initialize current agent
+    if "current_agent" not in st.session_state:
+        st.session_state.current_agent = None
+    
+    # Initialize memory
     if "memory" not in st.session_state:
-        custom_prompt = """
-            Please extract entities containing healthcare-related information such as patient details, diagnoses, treatments, medications, medical encounters, and any relevant healthcare events. Additionally, please handle analytical queries regarding healthcare statistics, such as averages, percentages, and cost breakdowns. Each input should be processed to return structured data that can be stored in a system or used to answer specific queries.
-
-            Here are some few-shot examples:
-
-            Input: Please fetch the medical history for patient ID 12345.
-            Output: {{"facts" : ["Medical history for patient ID 12345", "Diagnosis: Hypertension, Type 2 Diabetes", "Treatments: Metformin, Lisinopril"], "action": "fetch"}}
-
-            Input: Fetch the latest prescription details for patient ID 67890.
-            Output: {{"facts" : ["Prescription details for patient ID 67890", "Medications: 50mg Metformin, 10mg Lisinopril"], "action": "fetch"}}
-
-            Input: How much did patients with hypertension spend on healthcare on average last year?
-            Output: {{"facts" : ["Average healthcare expense for patients with hypertension: $4000"], "action": "fetch"}}
-
-            Input: What is the overall patient satisfaction score across all healthcare facilities?
-            Output: {{"facts" : ["Overall patient satisfaction score: 85%"], "action": "fetch"}}
-
-            Return the facts and the corresponding action ("store" or "fetch") in a JSON format as shown above.
-            """
-        config = {
+        st.session_state.memory = Memory.from_config(config_dict={
             "llm": {
                 "provider": "openai",
                 "config": {
@@ -390,13 +381,30 @@ def init_session_state():
                     "max_tokens": 2000,
                 }
             },
-            "custom_prompt": custom_prompt,
-        }
-        # st.session_state.memory = Memory()
-        st.session_state.memory = Memory.from_config(config_dict=config)
-    # Initialize session state for data if not already set
-    if "memory_data" not in st.session_state:
-        st.session_state.memory_data = st.session_state.memory.get_all(user_id="User", agent_id="Medical_graph_agent")["results"]  # Store the original data in session state
+            "custom_prompt": """
+                Please extract entities containing healthcare-related information such as patient details, diagnoses, treatments, medications, medical encounters, and any relevant healthcare events. Additionally, please handle analytical queries regarding healthcare statistics, such as averages, percentages, and cost breakdowns. Each input should be processed to return structured data that can be stored in a system or used to answer specific queries.
+
+                Here are some few-shot examples:
+
+                Input: Please fetch the medical history for patient ID 12345.
+                Output: {{"facts" : ["Medical history for patient ID 12345", "Diagnosis: Hypertension, Type 2 Diabetes", "Treatments: Metformin, Lisinopril"], "action": "fetch"}}
+
+                Input: Fetch the latest prescription details for patient ID 67890.
+                Output: {{"facts" : ["Prescription details for patient ID 67890", "Medications: 50mg Metformin, 10mg Lisinopril"], "action": "fetch"}}
+
+                Input: How much did patients with hypertension spend on healthcare on average last year?
+                Output: {{"facts" : ["Average healthcare expense for patients with hypertension: $4000"], "action": "fetch"}}
+
+                Input: What is the overall patient satisfaction score across all healthcare facilities?
+                Output: {{"facts" : ["Overall patient satisfaction score: 85%"], "action": "fetch"}}
+
+                Return the facts and the corresponding action ("store" or "fetch") in a JSON format as shown above.
+                """
+        })
+    
+    # Initialize graph
+    if "graph_initialized" not in st.session_state:
+        st.session_state.graph_initialized = False
 
 # Navigation functions
 def navigate_to_agent(agent_id):
@@ -419,9 +427,17 @@ def navigate_to_home():
 def clear_chat_history(agent_id=None):
     if agent_id:
         st.session_state.chat_history[agent_id] = []
+        st.session_state[f"debug_{agent_id}"] = ""
+        # Clear evaluation results for the agent
+        if f"evaluation_{agent_id}" in st.session_state:
+            del st.session_state[f"evaluation_{agent_id}"]
     else:
-        for agent in agent_info:
-            st.session_state.chat_history[agent] = []
+        for agent_id in agent_info.keys():
+            st.session_state.chat_history[agent_id] = []
+            st.session_state[f"debug_{agent_id}"] = ""
+            # Clear evaluation results for all agents
+            if f"evaluation_{agent_id}" in st.session_state:
+                del st.session_state[f"evaluation_{agent_id}"]
     st.rerun()
 
 # Home page with agent cards
@@ -662,6 +678,7 @@ def show_agent_page(agent_state):
     
     # Create containers first
     chat_container = st.container()
+    evaluation_container = st.container()  # New container for evaluation
     steps_container = st.container()
     
     # Get user input before displaying chat history
@@ -681,6 +698,31 @@ def show_agent_page(agent_state):
                 st.chat_message("user").write(message["content"])
             else:
                 st.chat_message("assistant", avatar=agent['icon']).write(message["content"])
+    
+    # Display evaluation if available
+    with evaluation_container:
+        if st.session_state.get(f"evaluation_{agent_id}"):
+            evaluation_results = st.session_state[f"evaluation_{agent_id}"]
+            st.markdown("### Response Evaluation")
+            metrics_cols = st.columns(4)
+            with metrics_cols[0]:
+                st.metric("Combined Score", f"{evaluation_results['combined_score']:.2f}")
+            with metrics_cols[1]:
+                if 'average_query_score' in evaluation_results:
+                    st.metric("Query Score", f"{evaluation_results['average_query_score']:.2f}")
+            with metrics_cols[2]:
+                st.metric("Interpretation Score", f"{evaluation_results['average_interpretation_score']:.2f}")
+            with metrics_cols[3]:
+                quality = "✅ Good" if evaluation_results['final_binary'] == 1 else "❌ Needs Improvement"
+                st.metric("Quality", quality)
+            
+            # Add a visual indicator based on the scores
+            if evaluation_results['combined_score'] >= 80:
+                st.success("This response meets high-quality standards! 🌟")
+            elif evaluation_results['combined_score'] >= 50:
+                st.info("This response is acceptable but could be improved. 📝")
+            else:
+                st.warning("This response needs significant improvement. ⚠️")
     
     # Display debug info
     with steps_container:
@@ -837,7 +879,11 @@ def show_agent_page(agent_state):
                             # Use the basic function with the callback handler
                             st.session_state[f"debug_{agent_id}"] += "\n🔍 Running basic function...\n"
                             agent_state['messages'].append(user_message)
-                            full_response = agent["function"](agent_state, st.session_state.memory,user_message)
+                            response_tuple = agent["function"](agent_state, st.session_state.memory, user_message)
+                            if isinstance(response_tuple, tuple) and len(response_tuple) == 2:
+                                full_response, aql_query = response_tuple
+                            else:
+                                full_response = response_tuple
                     except Exception as e:
                         # Log the error
                         st.session_state[f"debug_{agent_id}"] += f"\nError in streaming: {str(e)}\nFalling back to basic function...\n"
@@ -845,13 +891,33 @@ def show_agent_page(agent_state):
                         # Fall back to the basic function
                         st.session_state[f"debug_{agent_id}"] += "\n🔍 Running basic function...\n"
                         agent_state['messages'].append(user_message)
-                        full_response = agent["function"](agent_state, st.session_state.memory,user_message)
+                        response_tuple = agent["function"](agent_state, st.session_state.memory, user_message)
+                        if isinstance(response_tuple, tuple) and len(response_tuple) == 2:
+                            full_response, aql_query = response_tuple
+                        else:
+                            full_response = response_tuple
                 
                 # Update debug info
                 st.session_state[f"debug_{agent_id}"] += "\nAgent response generated successfully."
                 
                 # Add agent response to chat history
                 st.session_state.chat_history[agent_id].append({"role": "agent", "content": full_response})
+
+                # Run evaluation on the existing response
+                evaluation_results = evaluate_with_llm_judge(user_message, (full_response, aql_query) if 'aql_query' in locals() else full_response, agent_type=agent_id)
+
+                # Add evaluation results to debug info
+                if evaluation_results:
+                    st.session_state[f"debug_{agent_id}"] += "\n\n=== Response Evaluation ===\n"
+                    st.session_state[f"debug_{agent_id}"] += f"Combined Score: {evaluation_results['combined_score']:.2f}\n"
+                    if 'average_query_score' in evaluation_results:
+                        st.session_state[f"debug_{agent_id}"] += f"Query Score: {evaluation_results['average_query_score']:.2f}\n"
+                    st.session_state[f"debug_{agent_id}"] += f"Interpretation Score: {evaluation_results['average_interpretation_score']:.2f}\n"
+                    st.session_state[f"debug_{agent_id}"] += f"Final Binary: {evaluation_results['final_binary']}\n"
+
+                    # Store evaluation results in session state for display in the dedicated container
+                    st.session_state[f"evaluation_{agent_id}"] = evaluation_results
+
         except Exception as e:
             # Handle any errors
             error_message = f"Error: {str(e)}"

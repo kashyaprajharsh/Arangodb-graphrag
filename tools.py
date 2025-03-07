@@ -337,7 +337,7 @@ def text_to_aql_to_text(query: str):
           json
           {json.dumps(result['aql_result'], indent=2)}
           """
-        return response
+        return response,result['aql_query']
 
     except Exception as e:
         error_msg = f"Error processing query: {str(e)}\nPlease try rephrasing your question."

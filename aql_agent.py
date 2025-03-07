@@ -265,9 +265,13 @@ def run_aql_agent(state, memory, question: str, current_date: str = None):
         )
         memory.add(f"User: {state['messages'][-1]}\nAssistant: {result}", user_id=state['mem0_user_id'], agent_id=state['agent_id'])
         print("memory -:", memory.get_all(user_id=state['mem0_user_id'], agent_id=state['agent_id']))
-        # Get the last message content
+        # Get the last message content and AQL query if available
         if result["messages"] and len(result["messages"]) > 0:
-            return result["messages"][-1].content
+            last_message = result["messages"][-1]
+            if isinstance(last_message, tuple) and len(last_message) == 2:
+                return last_message  # Return the tuple directly
+            else:
+                return last_message.content if hasattr(last_message, 'content') else str(last_message)
         else:
             return "No response generated"
         
@@ -297,8 +301,6 @@ def run_aql_agent_with_stream(state, memory, question: str, current_date: str = 
     }
     
     # Create agent
-   
-    
     aql_agent = create_agent(
         state,
         memory,
@@ -316,7 +318,15 @@ def run_aql_agent_with_stream(state, memory, question: str, current_date: str = 
             {"callbacks": [initial_state["callback"]]},
             stream_mode="updates"
         ):
-            yield chunk
+            # If the chunk contains a tuple response, yield both parts
+            if isinstance(chunk, dict) and 'messages' in chunk:
+                last_message = chunk['messages'][-1] if chunk['messages'] else None
+                if isinstance(last_message, tuple) and len(last_message) == 2:
+                    yield {"response": last_message[0], "aql_query": last_message[1]}
+                else:
+                    yield chunk
+            else:
+                yield chunk
         memory.add(f"User: {state['messages'][-1]}\nAssistant: {chunk}", user_id=state['mem0_user_id'], agent_id=state['agent_id'])
         print("memory -:", memory.get_all(user_id=state['mem0_user_id'], agent_id=state['agent_id']))
     except Exception as e:
