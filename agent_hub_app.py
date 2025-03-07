@@ -252,16 +252,17 @@ agent_info = {
             "Extract actionable insights from complex network structures"
         ],
         "example_queries": [
-            "Show the pathway of care for patients with Otitis media",
-            "What providers are most commonly associated with medication reviews?",
-            "Map the relationship between patient ethnicity and healthcare coverage",
-            "Identify patterns in encounter types and healthcare expenses",
-            "Find clusters of patients with similar condition and medication patterns",
-            "What are the most connected conditions in the patient network?",
-            "Find common treatment pathways for patients with medication reviews",
-            "Identify potential drug interaction patterns",
-            "Which conditions frequently occur together?",
-            "Map the progression of conditions over time for Hispanic patients"
+            "Who is the most influential node?",
+            "Which node has highest degree of centrality in graph?",
+            "What is the shortest path between the most influential node and the rest of the graph?",
+            "Fetch the highest pagerank node and value",
+            "Which nodes are the most connected?",
+            "Which node has the highest betweenness centrality score? Use a k value of 10",
+            "Which node has the highest closeness centrality score? Use a k value of 10",
+            "Which node has the highest eigenvector centrality score? Use a k value of 10",
+            "How strongly connected is the network? Used connected components",
+            
+            
         ],
         "function": run_graph_analysis_agent,
         "stream_function": run_graph_analysis_agent_with_stream,
@@ -304,13 +305,14 @@ agent_info = {
             "Discover correlations between medical factors"
         ],
         "example_queries": [
-            "What is the average healthcare expense and coverage ratio across all patients?",
-            "How many Hispanic patients are there in Massachusetts?",
-            "What is the distribution of healthcare costs by race and ethnicity?",
-            "Compare healthcare coverage between different ZIP codes in Massachusetts",
-            "What percentage of patients require regular medication reviews?",
             "What are the most common treatment patterns for medication review patients?",
+            "What is the average healthcare expense and coverage ratio across all patients?",
             "Analyze the cost-effectiveness of different treatment approaches for Otitis media",
+            "What is the average healthcare expense and coverage ratio across all patients?",
+            "How many Hispanic patients are there in database?",
+            "What is the distribution of healthcare costs by race and ethnicity?",
+            "Compare healthcare coverage between different ZIP codes in database",
+            "What percentage of patients require regular medication reviews?",
             "Which conditions account for the highest percentage of total healthcare costs?",
             "Identify opportunities to reduce medication costs through alternative treatments",
             "What are the demographic trends in condition prevalence?"
@@ -330,15 +332,15 @@ agent_info = {
             "Provide comprehensive answers to complex medical queries"
         ],
         "example_queries": [
-            "Compare treatment patterns and costs between different ethnic groups in Massachusetts",
-            "Evaluate the efficiency of medication reviews across different healthcare providers",
-            "What factors contribute to higher healthcare coverage ratios?",
-            "Analyze the complete care journey for patients with multiple conditions",
-            "What are the most effective and cost-efficient treatments across different age groups?",
-            "Analyze the relationship between patient ethnicity, treatment adherence, and health outcomes",
-            "Compare treatment effectiveness and costs between different healthcare providers in Massachusetts",
-            "Identify patterns in treatment success rates across different patient populations",
-            "What are the key factors influencing patient healthcare expenses?"
+            "Who is the most influential node?",
+            "Which node has highest degree of centrality in graph?",
+            "What are the most common treatment patterns for medication review patients?",
+            "What is the average healthcare expense and coverage ratio across all patients?",
+            "How many encounters does patient 7c2e78bd-52cf-1fce-acc3-0ddd93104abe have?",
+            "What is the distribution of healthcare expenses across all patients?",
+            "Show me the complete medical history for patient Shila857 Kshlerin58 (ID: 7c2e78bd-52cf-1fce-acc3-0ddd93104abe)",
+            "What medications have been prescribed to this patient during their medication reviews?",
+
         ],
         "function": run_supervisor,
         "stream_function": run_supervisor_async,

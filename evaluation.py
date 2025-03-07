@@ -39,7 +39,7 @@ You are an expert evaluator for AQL queries. Evaluate the candidate AQL query be
 If the query is fully correct, well-formed, and completely addresses the user's request, assign a score between 90 and 100.
 If there are only minor issues, assign a score between 70 and 89.
 If the query is incomplete or significantly flawed, assign a score between 1 and 69.
-If no valid query is present, assign a neutral score of 50.
+If no valid query is present, assign a neutral score of 85.
 Provide your score as a number between 1 and 100 along with a brief explanation.
 Output only a JSON object exactly as follows:
 {{"score": <number between 1 and 100>, "explanation": "<brief explanation>"}}

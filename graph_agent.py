@@ -3,12 +3,14 @@ import json
 import time
 import re
 import networkx as nx
-import nx_arangodb as nxadb
+# import nx_arangodb as nxadb
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Annotated, Dict, TypedDict, Any, Optional, List
 from datetime import datetime
 from pydantic import BaseModel
+import atexit
+import pickle
 
 # LangChain and LangGraph imports
 from langgraph.graph import StateGraph, START, END
@@ -23,12 +25,35 @@ from langchain.agents import (
     create_openai_tools_agent,
 )
 import asyncio
+
+# Memory imports
+from langgraph.store.memory import InMemoryStore
+from langmem import create_manage_memory_tool, create_search_memory_tool
+
 # ArangoDB imports
 from arango import ArangoClient
 from tools import *
 from callback import *
 from settings import *
+from dotenv import load_dotenv
 from memory import get_memory_tools, get_memory_store
+load_dotenv()
+
+
+store = InMemoryStore(
+    index={
+        "dims": 1536,
+        "embed": "openai:text-embedding-3-small",
+    }
+)
+
+
+# os.environ["LANGSMITH_TRACING"] = "true"
+# os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
+# os.environ["LANGSMITH_PROJECT"] = "arangodb-cugraph"
+# os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
+
+
 
 # Tools for each specialized agent
 GRAPH_ANALYSIS_TOOLS = [text_to_nx_algorithm_to_text]
@@ -50,7 +75,7 @@ def create_llm():
 
 
 
-def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str, max_iterations: int = 2, max_execution_time: int = 120) -> AgentExecutor:
+def create_agent(state, memory, llm: ChatOpenAI, tools: list, system_prompt: str, max_iterations: int = 2, max_execution_time: int = 120) -> AgentExecutor:
     """
     Creates a LangGraph react agent using the specified ChatOpenAI model, tools, and system prompt.
     
@@ -61,19 +86,26 @@ def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str, max_iteration
         max_iterations: Maximum number of iterations (will be converted to recursion_limit)
         max_execution_time: Maximum execution time in seconds
     """
-    def _modify_state_messages(state: AgentState):
+    def _modify_state_messages(state, memory):
+        # Retrieve relevant memories
+        memories = memory.search(state["messages"][-1], user_id=state["mem0_user_id"])
+        context = "Relevant information from previous conversations:\n"
+        for memory__ in memories["results"]:
+            context += f"- {memory__['memory']}\n"
         # Add system prompt and keep existing messages
-        return [("system", system_prompt)] + state["messages"]
+        full_prompt = system_prompt + "\n" + "Use the provided context to personalize your responses and remember user preferences and past interactions." + "\n" + context + "User-", " ".join(state["messages"])
+        return full_prompt[0]
     
-    # Add memory tools to the existing tools
-    memory_tools = get_memory_tools("graph_analysis")
+    # Create the react agent
+        # Add memory tools to the existing tools
+    memory_tools = get_memory_tools("aql_query")
     all_tools = tools + memory_tools
     
     # Create the react agent with memory capabilities
     agent = create_react_agent(
         llm, 
         all_tools, 
-        prompt=_modify_state_messages,
+        prompt=_modify_state_messages(state, memory),
         store=get_memory_store()
     )
     
@@ -84,6 +116,7 @@ def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str, max_iteration
     agent.step_timeout = max_execution_time
     
     return agent
+
 
 
 system_prompt = f"""You are an expert graph analyst specializing in medical network analysis.
@@ -166,9 +199,11 @@ def graph_analysis_node(state):
     return state
 
 
-def run_graph_analysis_agent(question: str, current_date: str = None):
+
+
+def run_graph_analysis_agent(state, memory, question: str, current_date: str = None):
     """
-    Runs the financial agent with the given question.
+    Runs the graph analysis agent with the given question.
     
     Args:
         question: The user's question
@@ -184,13 +219,15 @@ def run_graph_analysis_agent(question: str, current_date: str = None):
         "messages": [("human", question)],
         "user_input": question,
         "callback": CustomConsoleCallbackHandler(),
-        "graph_analysis_agent_internal_state": {}
+        "aql_query_agent_internal_state": {}
     }
     
     # Basic usage
     try:
         # Create agent directly like in the other methods
         graph_analysis_agent = create_agent(
+            state,
+            memory,
             llm,
             GRAPH_ANALYSIS_TOOLS,
             system_prompt,
@@ -203,17 +240,22 @@ def run_graph_analysis_agent(question: str, current_date: str = None):
             {"messages": initial_state["messages"]},
             {"callbacks": [initial_state["callback"]]}
         )
-        
-        # Get the last message content
+        memory.add(f"User: {state['messages'][-1]}\nAssistant: {result}", user_id=state['mem0_user_id'], agent_id=state['agent_id'])
+        print("memory -:", memory.get_all(user_id=state['mem0_user_id'], agent_id=state['agent_id']))
+        # Get the last message content and AQL query if available
         if result["messages"] and len(result["messages"]) > 0:
-            return result["messages"][-1].content
+            last_message = result["messages"][-1]
+            if isinstance(last_message, tuple) and len(last_message) == 2:
+                return last_message  # Return the tuple directly
+            else:
+                return last_message.content if hasattr(last_message, 'content') else str(last_message)
         else:
             return "No response generated"
         
     except Exception as e:
         return f"Error running agent: {str(e)}"
 
-def run_graph_analysis_agent_with_stream(question: str, current_date: str = None):
+def run_graph_analysis_agent_with_stream(state, memory, question: str, current_date: str = None):
     """
     Runs the financial agent with streaming output.
     
@@ -232,13 +274,13 @@ def run_graph_analysis_agent_with_stream(question: str, current_date: str = None
         "messages": [("human", question)],
         "user_input": question,
         "callback": CustomConsoleCallbackHandler(),
-        "graph_analysis_agent_internal_state": {}
+        "aql_query_agent_internal_state": {}
     }
     
     # Create agent
-   
-    
     graph_analysis_agent = create_agent(
+        state,
+        memory,
         llm,
         GRAPH_ANALYSIS_TOOLS,
         system_prompt,
@@ -253,8 +295,17 @@ def run_graph_analysis_agent_with_stream(question: str, current_date: str = None
             {"callbacks": [initial_state["callback"]]},
             stream_mode="updates"
         ):
-            yield chunk
-            
+            # If the chunk contains a tuple response, yield both parts
+            if isinstance(chunk, dict) and 'messages' in chunk:
+                last_message = chunk['messages'][-1] if chunk['messages'] else None
+                if isinstance(last_message, tuple) and len(last_message) == 2:
+                    yield {"response": last_message[0], "aql_query": last_message[1]}
+                else:
+                    yield chunk
+            else:
+                yield chunk
+        memory.add(f"User: {state['messages'][-1]}\nAssistant: {chunk}", user_id=state['mem0_user_id'], agent_id=state['agent_id'])
+        print("memory -:", memory.get_all(user_id=state['mem0_user_id'], agent_id=state['agent_id']))
     except Exception as e:
         yield {"error": f"Error streaming agent: {str(e)}"}
 
@@ -281,7 +332,7 @@ async def run_graph_analysis_agent_async(question: str, current_date: str = None
     }
 
     
-    graph_analysis_agent = create_agent(
+    aql_agent = create_agent(
         llm,
         GRAPH_ANALYSIS_TOOLS,
         system_prompt,
@@ -292,7 +343,7 @@ async def run_graph_analysis_agent_async(question: str, current_date: str = None
     try:
         # Run with overall timeout
         task = asyncio.create_task(
-            graph_analysis_agent.ainvoke(
+            aql_agent.ainvoke(
                 {"messages": initial_state["messages"]},
                 {"callbacks": [initial_state["callback"]]}
             )
@@ -309,7 +360,7 @@ async def run_graph_analysis_agent_async(question: str, current_date: str = None
 # Example usage:
 if __name__ == "__main__":
     # Basic usage
-    question = "find node with highest betweenness centrality in the graph"
+    question = "What is the average age of patients in the database?"
     result = run_graph_analysis_agent(question)
     print(f"Basic result: {result}")
     
