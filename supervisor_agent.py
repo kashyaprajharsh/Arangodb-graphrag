@@ -61,6 +61,8 @@ def create_specialized_agents(state, memory, llm):
     
     # Graph Analysis Agent
     graph_agent = create_graph_agent(
+         state,
+        memory,
         llm=llm,
         tools=GRAPH_ANALYSIS_TOOLS,
         system_prompt=graph_system_prompt,
