@@ -25,8 +25,15 @@ Each agent has specific capabilities and tools designed for different aspects of
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │                       Graph Cache System                        │    │
 │  │  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐    │    │
-│  │  │ ArangoDB Conn │  │ NetworkX Graph│  │ ArangoGraph Object│    │    │
+│  │  │ ArangoDB Conn │  │NetworkXCuGraph│  │ ArangoGraph Object│    │    │
 │  │  └───────────────┘  └───────────────┘  └───────────────────┘    │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+│                                  │                                       │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                     Memory Management System                     │    │
+│  │  ┌───────────────┐  ┌───────────────┐                           │    │
+│  │  │  mem0 Memory  │  │    langmem    │                           │    │
+│  │  └───────────────┘  └───────────────┘                           │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                  │                                       │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
@@ -64,6 +71,7 @@ Each agent has specific capabilities and tools designed for different aspects of
 │  └─────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
 
 ## Environment Setup
 
@@ -119,6 +127,17 @@ MediGraph Consilium implements an intelligent graph caching system that signific
 - **Cache Management**: Users can view when the graph was last loaded and manually refresh if needed
 - **Automatic Refresh**: The cache automatically refreshes after a configurable time period (default: 1 hour)
 - **Performance Metrics**: Loading time and cache status are tracked and displayed
+
+## Memory Management System
+
+MediGraph Consilium uses a sophisticated memory management system to provide agents with context from previous conversations:
+
+- **mem0**: Provides persistent memory storage for agent conversations
+- **langmem**: Offers memory tools for agents to store and retrieve information
+- **User-specific Memory**: Each user has a dedicated memory space identified by mem0_user_id
+- **Agent-specific Memory**: Each agent maintains its own memory context
+- **Semantic Search**: Agents can search for relevant information from past conversations
+- **Memory Management Tools**: Agents can manage their memory with specialized tools
 
 ## Data Flow
 
@@ -198,8 +217,10 @@ The application uses:
 - **Streamlit**: For the web interface
 - **LangChain and LangGraph**: For agent orchestration
 - **ArangoDB**: For the medical graph database
-- **NetworkX**: For graph analysis algorithms
+- **NetworkXCuGraph**: For graph analysis algorithms
 - **OpenAI's models**: For natural language processing
+- **mem0**: For persistent memory management
+- **langmem**: For agent memory tools
 - **Custom Caching System**: For optimized graph database performance
 
 ## How the Supervisor Agent Works
