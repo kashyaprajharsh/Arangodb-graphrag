@@ -14,6 +14,8 @@ Each agent has specific capabilities and tools designed for different aspects of
 
 ## System Architecture
 
+![MediGraph Consilium Architecture](architecture.png)
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        MediGraph Consilium                               │
